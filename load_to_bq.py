@@ -8,6 +8,7 @@ import logging
 import csv
 import sys
 import os
+from datetime import datetime
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io.gcp.bigquery import WriteToBigQuery
 from apache_beam.io.gcp.bigquery import BigQueryDisposition
@@ -23,40 +24,82 @@ except ImportError:
 def parse_csv(element):
     """
     Parsea una línea de un archivo CSV y la convierte en un diccionario.
-    ¡IMPORTANTE! Edita esta función para que coincida con tu esquema de datos.
+    Esta función maneja la conversión de tipos y los errores de parsing.
     """
     try:
-        # Asumimos que el CSV usa comas como delimitador
-        # Si usa punto y coma, cambia ',' por ';'
         row = next(csv.reader([element], delimiter=','))
+
+        if len(row) != 21:
+            logging.warning(f"⚠️ Fila con número de columnas incorrecto ignorada: {row}")
+            return None
+
+        # Conversión de tipos y validación
+        def to_int(value):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return None
+
+        def to_float(value):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+
+        def to_timestamp(value):
+            try:
+                # Intenta parsear varios formatos de fecha/hora
+                return datetime.strptime(value, '%Y-%m-%d %H:%M:%S').isoformat()
+            except (ValueError, TypeError):
+                try:
+                    return datetime.strptime(value, '%Y-%m-%dT%H:%M:%S').isoformat()
+                except (ValueError, TypeError):
+                    logging.warning(f"No se pudo parsear el timestamp: {value}")
+                    return None
         
-        # ¡EDITAR ESTA FUNCIÓN SEGÚN TU ESQUEMA!
-        # Ejemplo para el esquema definido en config.py:
-        return {
-            "transaction_id": row[0] if len(row) > 0 else "",
-            "date": row[1] if len(row) > 1 else "",
-            "timestamp": row[2] if len(row) > 2 else "",
-            "customer_id": row[3] if len(row) > 3 else "",
-            "customer_segment": row[4] if len(row) > 4 else "",
-            "product_id": row[5] if len(row) > 5 else "",
-            "product_category": row[6] if len(row) > 6 else "",
-            "product_lifecycle": row[7] if len(row) > 7 else "",
-            "quantity": int(row[8]) if len(row) > 8 and row[8].isdigit() else 0,
-            "unit_price": float(row[9]) if len(row) > 9 and row[9].replace('.', '').replace('-', '').isdigit() else 0.0,
-            "total_amount": float(row[10]) if len(row) > 10 and row[10].replace('.', '').replace('-', '').isdigit() else 0.0,
-            "currency": row[11] if len(row) > 11 else "",
-            "region": row[12] if len(row) > 12 else "",
-            "warehouse": row[13] if len(row) > 13 else "",
-            "status": row[14] if len(row) > 14 else "",
-            "payment_method": row[15] if len(row) > 15 else "",
-            "discount_pct": float(row[16]) if len(row) > 16 and row[16].replace('.', '').replace('-', '').isdigit() else 0.0,
-            "tax_amount": row[17] if len(row) > 17 else "",
-            "notes": row[18] if len(row) > 18 else "",
-            "created_by": row[19] if len(row) > 19 else "",
-            "modified_date": row[20] if len(row) > 20 else ""
+        def to_date(value):
+            try:
+                return datetime.strptime(value, '%Y-%m-%d').date().isoformat()
+            except (ValueError, TypeError):
+                logging.warning(f"No se pudo parsear la fecha: {value}")
+                return None
+
+        data = {
+            "transaction_id": row[0],
+            "date": row[1],
+            "timestamp": to_timestamp(row[2]),
+            "customer_id": row[3],
+            "customer_segment": row[4],
+            "product_id": row[5],
+            "product_category": row[6],
+            "product_lifecycle": row[7],
+            "quantity": to_int(row[8]),
+            "unit_price": to_float(row[9]),
+            "total_amount": to_float(row[10]),
+            "currency": row[11],
+            "region": row[12],
+            "warehouse": row[13],
+            "status": row[14],
+            "payment_method": row[15],
+            "discount_pct": to_float(row[16]),
+            "tax_amount": row[17],
+            "notes": row[18],
+            "created_by": row[19],
+            "modified_date": to_date(row[20])
         }
+        
+        # Validar que los campos requeridos no sean nulos después del parsing
+        if data["timestamp"] is None or data["modified_date"] is None or data["quantity"] is None:
+            logging.error(f"❌ Fila con valores nulos en campos requeridos ignorada: {row}")
+            return None
+
+        return data
+
+    except csv.Error as e:
+        logging.error(f"❌ Error de CSV parseando fila: {element[:100]}... - {e}")
+        return None
     except Exception as e:
-        logging.error(f"❌ Error parseando fila: {element[:100]}... - {e}")
+        logging.error(f"❌ Error inesperado parseando fila: {element[:100]}... - {e}")
         return None
 
 def run():
@@ -94,7 +137,7 @@ def run():
                 compression_type=beam.io.textio.CompressionTypes.GZIP
             )
             | "🔧 Parsear CSV" >> beam.Map(parse_csv)
-            | "🚫 Filtrar filas nulas" >> beam.Filter(lambda x: x is not None)
+            | "🚫 Filtrar filas nulas" >> beam.Filter(lambda x: x)
             | "📊 Escribir a BigQuery" >> WriteToBigQuery(
                 table=f"{PROJECT_ID}:{DATASET}.{TABLE}",
                 schema=TABLE_SCHEMA,

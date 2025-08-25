@@ -1,3 +1,5 @@
+import time
+
 # 🚀 Gemini: Configuración del Proyecto
 # Configuración para carga masiva CSV a BigQuery con Apache Beam Dataflow
 
@@ -15,12 +17,12 @@ GCS_FILE_PATH = "gs://desafio-deacero-143d30a0-d8f8-4154-b7df-1773cf286d32/cdo_c
 PIPELINE_CONFIG = {
     "runner": "DataflowRunner",
     "project": PROJECT_ID,
-    "job_name": "gemini-csv-to-bq",
+    "job_name": f"gemini-csv-to-bq-{int(time.time())}",
     "staging_location": f"gs://{BUCKET}/staging",
     "temp_location": f"gs://{BUCKET}/temp",
     "region": REGION,
-    "num_workers": 50,
-    "max_num_workers": 100,
+    "num_workers": 20,
+    "max_num_workers": 24,
     "machine_type": "n1-standard-4",
     "disk_size_gb": 50,
     "worker_disk_type": "pd-ssd"

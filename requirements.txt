@@ -1,7 +1,7 @@
 # Dependencias para Gemini: Carga Masiva CSV a BigQuery
-apache-beam[gcp]==2.48.0
-google-cloud-bigquery==3.13.0
-google-cloud-storage==2.10.0
-google-auth==2.23.0
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
+apache-beam[gcp]>=2.61.0
+google-cloud-bigquery
+google-cloud-storage
+google-auth
+google-auth-oauthlib
+google-auth-httplib2

@@ -136,9 +136,15 @@ create_bucket() {
     fi
     
     # Crear directorios necesarios
-    gsutil -m mkdir "gs://$BUCKET/staging"
-    gsutil -m mkdir "gs://$BUCKET/temp"
-    print_success "Directorios de staging y temp creados"
+    print_status "Creando directorios de staging y temp..."
+    if ! gsutil -q stat "gs://$BUCKET/staging/"; then
+        echo "" | gsutil cp - "gs://$BUCKET/staging/.placeholder"
+        print_success "Directorio de staging creado."
+    fi
+    if ! gsutil -q stat "gs://$BUCKET/temp/"; then
+        echo "" | gsutil cp - "gs://$BUCKET/temp/.placeholder"
+        print_success "Directorio de temp creado."
+    fi
 }
 
 # Función para crear dataset
@@ -223,12 +229,12 @@ create_requirements() {
     
     cat > requirements.txt << EOF
 # Dependencias para Gemini: Carga Masiva CSV a BigQuery
-apache-beam[gcp]==2.48.0
-google-cloud-bigquery==3.13.0
-google-cloud-storage==2.10.0
-google-auth==2.23.0
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
+apache-beam[gcp]>=2.61.0
+google-cloud-bigquery
+google-cloud-storage
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
 EOF
     
     print_success "Archivo de dependencias creado: requirements.txt"
@@ -383,9 +389,12 @@ install_dependencies() {
     else
         PIP_CMD="pip3"
     fi
+
+    # Actualizar pip, setuptools y wheel
+    "$PIP_CMD" install --upgrade pip setuptools wheel
     
     # Instalar dependencias
-    $PIP_CMD install -r requirements.txt
+    "$PIP_CMD" install --no-build-isolation -r requirements.txt
     
     print_success "Dependencias instaladas correctamente"
 }
